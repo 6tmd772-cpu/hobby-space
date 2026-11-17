@@ -11,7 +11,7 @@ const STORAGE_KEYS = {
 
 // 테스트 모드 활성화 여부
 export function isTestModeActive() {
-  if (!import.meta.env.DEV) return false
+ 
   return localStorage.getItem(STORAGE_KEYS.TEST_MODE_ACTIVE) === 'true'
 }
 

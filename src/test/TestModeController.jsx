@@ -8,7 +8,7 @@ export default function TestModeController() {
   const { isTestMode, testUser } = useAuth()
 
   // 개발 환경(import.meta.env.DEV)에서만 렌더링
-  if (!import.meta.env.DEV) return null
+  
 
   const handleRoleSelect = (roleId) => {
     setTestRole(roleId)
@@ -43,7 +43,7 @@ export default function TestModeController() {
         <div className="test-controller-panel">
           <div className="test-panel-header">
             <h4>🧪 프론트엔드 가상 권한 테스트</h4>
-            <span className="test-badge-notice">개발 환경 전용</span>
+            <span className="test-badge-notice">과제 시연용</span>
           </div>
 
           <p className="test-disclaimer">
