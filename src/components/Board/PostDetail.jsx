@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/useAuth'
+import CommentSection from './CommentSection'
+import { HOBBY_BOARDS } from '../Layout/Sidebar'
 
 function formatDate(dateString) {
   if (!dateString) return ''
@@ -14,37 +16,45 @@ function formatDate(dateString) {
   }).format(date)
 }
 
-export default function PostDetail({ postId, onBack, onEdit, onDeleted }) {
+export default function PostDetail({ postId, onBack, onEdit, onDeleted, onOpenAuth }) {
   const [post, setPost] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, canManageBoard } = useAuth()
 
   useEffect(() => {
+    let ignore = false
+
     const fetchPost = async () => {
-      setLoading(true)
-      setError(null)
       try {
-        const { data, error } = await supabase
+        const { data, error: queryError } = await supabase
           .from('posts')
           .select('*')
           .eq('id', postId)
           .single()
 
-        if (error) throw error
-        setPost(data)
+        if (!ignore) {
+          if (queryError) throw queryError
+          setPost(data)
+        }
       } catch (err) {
         console.error('Failed to load post detail:', err)
-        setError('게시글을 찾을 수 없거나 불러오는 중 오류가 발생했습니다.')
+        if (!ignore) {
+          setError('게시글을 찾을 수 없거나 불러오는 중 오류가 발생했습니다.')
+        }
       } finally {
-        setLoading(false)
+        if (!ignore) setLoading(false)
       }
     }
 
     if (postId) {
       fetchPost()
+    }
+
+    return () => {
+      ignore = true
     }
   }, [postId])
 
@@ -55,12 +65,12 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted }) {
 
     setDeleting(true)
     try {
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from('posts')
         .delete()
         .eq('id', postId)
 
-      if (error) throw error
+      if (deleteError) throw deleteError
       alert('게시글이 삭제되었습니다.')
       onDeleted()
     } catch (err) {
@@ -71,8 +81,13 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted }) {
     }
   }
 
-  // 작성자 본인이거나 관리자인 경우 수정/삭제 권한 부여
-  const canManage = Boolean(user && post && (user.id === post.author_id || isAdmin))
+  // 작성자 본인, 전체 관리자, 또는 해당 게시판 관리자인 경우 관리 가능
+  const canManage = Boolean(
+    user && post && (user.id === post.author_id || isAdmin || canManageBoard(post.board_id))
+  )
+
+  const boardObj = post ? HOBBY_BOARDS.find((b) => b.id === post.board_id) : null
+  const boardDisplayName = boardObj ? boardObj.name : '자유 공간'
 
   if (loading) {
     return (
@@ -104,7 +119,10 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted }) {
         {canManage && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {isAdmin && user.id !== post.author_id && (
-              <span className="role-tag admin">관리자 관리 모드</span>
+              <span className="role-tag admin">전체 관리자</span>
+            )}
+            {!isAdmin && canManageBoard(post.board_id) && user.id !== post.author_id && (
+              <span className="role-tag manager">취미 관리자</span>
             )}
             <button
               type="button"
@@ -126,12 +144,13 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted }) {
       </nav>
 
       <header className="detail-header">
+        <div className="post-board-badge">{boardDisplayName}</div>
         <h1 className="detail-title">{post.title}</h1>
 
         <div className="detail-meta">
           <div className="author-info">
             <span>작성자:</span>
-            <span className="author-name">{post.author_name}</span>
+            <span className="author-name">{post.author_nickname || post.author_name}</span>
           </div>
           <span>•</span>
           <time dateTime={post.created_at}>
@@ -149,11 +168,11 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted }) {
         {post.content}
       </div>
 
-      <footer className="detail-actions">
-        <button type="button" className="btn btn-outline" onClick={onBack}>
-          목록으로 돌아가기
-        </button>
-      </footer>
+      <CommentSection
+        postId={post.id}
+        boardId={post.board_id}
+        onOpenAuth={onOpenAuth}
+      />
     </article>
   )
 }

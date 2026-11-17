@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AuthProvider } from './context/AuthContext'
 import { useAuth } from './context/useAuth'
 import Header from './components/Layout/Header'
+import Sidebar from './components/Layout/Sidebar'
 import Footer from './components/Layout/Footer'
 import AuthModal from './components/Auth/AuthModal'
 import PostList from './components/Board/PostList'
@@ -9,12 +10,22 @@ import PostDetail from './components/Board/PostDetail'
 import PostForm from './components/Board/PostForm'
 
 function MainApp() {
+  const [selectedBoard, setSelectedBoard] = useState('all') // 'all' | 'book' | 'game' | 'music' | 'cook' | 'active'
   const [view, setView] = useState('list') // 'list' | 'detail' | 'create' | 'edit'
   const [selectedPostId, setSelectedPostId] = useState(null)
   const [editingPost, setEditingPost] = useState(null)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const { user } = useAuth()
+
+  const handleSelectBoard = (boardId) => {
+    setSelectedBoard(boardId)
+    setSelectedPostId(null)
+    setEditingPost(null)
+    setView('list')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const handleNavigate = (targetView) => {
     if (targetView === 'create') {
@@ -66,43 +77,54 @@ function MainApp() {
       <Header
         onNavigate={handleNavigate}
         onOpenAuth={() => setIsAuthModalOpen(true)}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       />
 
-      <main className="main-content">
-        {view === 'list' && (
-          <PostList
-            onSelectPost={handleSelectPost}
-            onNavigateCreate={() => handleNavigate('create')}
-            onOpenAuth={() => setIsAuthModalOpen(true)}
-          />
-        )}
+      <div className="layout-body">
+        <Sidebar
+          selectedBoard={selectedBoard}
+          onSelectBoard={handleSelectBoard}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+        />
 
-        {view === 'detail' && (
-          <PostDetail
-            postId={selectedPostId}
-            onBack={() => handleNavigate('list')}
-            onEdit={handleEditPost}
-            onDeleted={() => handleNavigate('list')}
-          />
-        )}
+        <main className="main-content">
+          {view === 'list' && (
+            <PostList
+              selectedBoard={selectedBoard}
+              onSelectPost={handleSelectPost}
+            />
+          )}
 
-        {view === 'create' && (
-          <PostForm
-            mode="create"
-            onSaved={handlePostSaved}
-            onCancel={() => handleNavigate('list')}
-          />
-        )}
+          {view === 'detail' && (
+            <PostDetail
+              postId={selectedPostId}
+              onBack={() => handleNavigate('list')}
+              onEdit={handleEditPost}
+              onDeleted={() => handleNavigate('list')}
+              onOpenAuth={() => setIsAuthModalOpen(true)}
+            />
+          )}
 
-        {view === 'edit' && (
-          <PostForm
-            mode="edit"
-            initialPost={editingPost}
-            onSaved={handlePostSaved}
-            onCancel={() => handleNavigate('detail')}
-          />
-        )}
-      </main>
+          {view === 'create' && (
+            <PostForm
+              mode="create"
+              defaultBoard={selectedBoard}
+              onSaved={handlePostSaved}
+              onCancel={() => handleNavigate('list')}
+            />
+          )}
+
+          {view === 'edit' && (
+            <PostForm
+              mode="edit"
+              initialPost={editingPost}
+              onSaved={handlePostSaved}
+              onCancel={() => handleNavigate('detail')}
+            />
+          )}
+        </main>
+      </div>
 
       <Footer />
 

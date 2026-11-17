@@ -2,13 +2,33 @@ import { useState } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/useAuth'
 
-export default function PostForm({ mode = 'create', initialPost = null, onSaved, onCancel }) {
+const WRITEABLE_BOARDS = [
+  { id: 'book', name: 'BOOK SPACE (독서/서평)' },
+  { id: 'game', name: 'GAME SPACE (게임)' },
+  { id: 'music', name: 'MUSIC SPACE (음악)' },
+  { id: 'cook', name: 'COOK SPACE (요리/베이킹)' },
+  { id: 'active', name: 'ACTIVE SPACE (운동/스포츠)' },
+]
+
+export default function PostForm({
+  mode = 'create',
+  initialPost = null,
+  defaultBoard = 'book',
+  onSaved,
+  onCancel,
+}) {
+  const [boardId, setBoardId] = useState(() => {
+    if (mode === 'edit' && initialPost?.board_id) {
+      return initialPost.board_id
+    }
+    return defaultBoard && defaultBoard !== 'all' ? defaultBoard : 'book'
+  })
   const [title, setTitle] = useState(() => (mode === 'edit' && initialPost?.title ? initialPost.title : ''))
   const [content, setContent] = useState(() => (mode === 'edit' && initialPost?.content ? initialPost.content : ''))
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  const { user, userName } = useAuth()
+  const { user, userNickname } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -38,11 +58,12 @@ export default function PostForm({ mode = 'create', initialPost = null, onSaved,
         const { data, error } = await supabase
           .from('posts')
           .insert({
+            board_id: boardId,
             title: trimmedTitle,
             content: trimmedContent,
             author_id: user.id,
-            author_name: userName, // DB 트리거가 profiles의 실제 실명으로 재차 검증 및 보정합니다.
-            board_id: 'general',
+            author_nickname: userNickname,
+            author_name: userNickname,
           })
           .select()
           .single()
@@ -53,6 +74,7 @@ export default function PostForm({ mode = 'create', initialPost = null, onSaved,
         const { error } = await supabase
           .from('posts')
           .update({
+            board_id: boardId,
             title: trimmedTitle,
             content: trimmedContent,
           })
@@ -76,13 +98,32 @@ export default function PostForm({ mode = 'create', initialPost = null, onSaved,
           {mode === 'create' ? '새로운 취미 이야기 기록하기' : '이야기 다듬기 (수정)'}
         </h1>
         <p style={{ marginTop: '6px', color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-          작성자: <strong style={{ color: 'var(--color-charcoal)' }}>{userName}</strong> (실명으로 발행됩니다)
+          작성자: <strong style={{ color: 'var(--color-charcoal)' }}>{userNickname}</strong> (닉네임으로 발행됩니다)
         </p>
       </header>
 
       {errorMsg && <div className="modal-alert error">{errorMsg}</div>}
 
       <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label className="form-label" htmlFor="post-board">
+            취미 공간 선택
+          </label>
+          <select
+            id="post-board"
+            className="form-input"
+            value={boardId}
+            onChange={(e) => setBoardId(e.target.value)}
+            disabled={saving}
+          >
+            {WRITEABLE_BOARDS.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="form-group">
           <label className="form-label" htmlFor="post-title">
             이야기 제목
@@ -91,7 +132,7 @@ export default function PostForm({ mode = 'create', initialPost = null, onSaved,
             id="post-title"
             type="text"
             className="form-input"
-            placeholder="나누고 싶은 취미나 관심사 이야기의 제목을 적어주세요"
+            placeholder="나누고 싶은 취미 이야기의 제목을 적어주세요"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             disabled={saving}
@@ -106,7 +147,7 @@ export default function PostForm({ mode = 'create', initialPost = null, onSaved,
           <textarea
             id="post-content"
             className="form-textarea"
-            placeholder="시작하게 된 계기, 즐기는 방법, 추천 장비나 나만의 팁 등 자유롭게 이야기를 풀어내 보세요..."
+            placeholder="시작하게 된 계기, 즐기는 방법, 추천 아이템이나 나만의 팁 등 자유롭게 이야기를 풀어내 보세요..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
             disabled={saving}

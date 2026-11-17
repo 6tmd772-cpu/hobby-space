@@ -5,7 +5,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const [tab, setTab] = useState('login') // 'login' | 'signup'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
+  const [nickname, setNickname] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
@@ -17,7 +17,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const resetForm = () => {
     setEmail('')
     setPassword('')
-    setName('')
+    setNickname('')
     setErrorMsg('')
     setSuccessMsg('')
   }
@@ -38,14 +38,14 @@ export default function AuthModal({ isOpen, onClose }) {
         await signIn({ email, password })
         onClose()
       } else {
-        if (!name.trim()) {
-          throw new Error('활동하실 실명을 입력해 주세요.')
+        const trimmedNickname = nickname.trim()
+        if (!trimmedNickname) {
+          throw new Error('활동하실 닉네임을 입력해 주세요.')
         }
-        await signUp({ email, password, name })
-        setSuccessMsg('회원가입이 완료되었습니다! 로그인된 상태로 시작합니다.')
-        setTimeout(() => {
-          onClose()
-        }, 900)
+        await signUp({ email, password, nickname: trimmedNickname })
+        setSuccessMsg(
+          '회원가입 요청이 완료되었습니다! 발송된 인증 메일의 링크를 클릭하신 후 로그인해 주세요.'
+        )
       }
     } catch (err) {
       console.error(err)
@@ -56,6 +56,8 @@ export default function AuthModal({ isOpen, onClose }) {
         message = '이미 가입된 이메일 주소입니다.'
       } else if (message.includes('Password should be at least')) {
         message = '비밀번호는 최소 6자 이상이어야 합니다.'
+      } else if (message.includes('Email not confirmed')) {
+        message = '이메일 인증이 완료되지 않았습니다. 메일함의 인증 링크를 먼저 확인해 주세요.'
       }
       setErrorMsg(message)
     } finally {
@@ -94,28 +96,15 @@ export default function AuthModal({ isOpen, onClose }) {
 
         <form className="modal-body" onSubmit={handleSubmit}>
           {errorMsg && <div className="modal-alert error">{errorMsg}</div>}
-          {successMsg && <div className="modal-alert success">{successMsg}</div>}
-
-          {tab === 'signup' && (
-            <div className="form-group">
-              <label className="form-label" htmlFor="user-name">
-                이름 (실명)
-              </label>
-              <input
-                id="user-name"
-                type="text"
-                className="form-input"
-                placeholder="게시글에 표시될 실명을 입력하세요 (예: 홍길동)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
+          {successMsg && (
+            <div className="modal-alert success" style={{ lineHeight: '1.5' }}>
+              {successMsg}
             </div>
           )}
 
           <div className="form-group">
             <label className="form-label" htmlFor="user-email">
-              이메일
+              이메일 주소 (로그인 계정)
             </label>
             <input
               id="user-email"
@@ -126,6 +115,9 @@ export default function AuthModal({ isOpen, onClose }) {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+            <small style={{ color: 'var(--color-muted)', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+              이메일은 계정 인증 및 로그인 전용이며 다른 회원에게 공개되지 않습니다.
+            </small>
           </div>
 
           <div className="form-group">
@@ -143,17 +135,37 @@ export default function AuthModal({ isOpen, onClose }) {
             />
           </div>
 
+          {tab === 'signup' && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="user-nickname">
+                활동 닉네임
+              </label>
+              <input
+                id="user-nickname"
+                type="text"
+                className="form-input"
+                placeholder="게시글과 댓글에 표시될 닉네임 (실명 불필요)"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                required
+              />
+              <small style={{ color: 'var(--color-muted)', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+                게시글 및 댓글에 작성자 이름으로 표시됩니다.
+              </small>
+            </div>
+          )}
+
           <button
             type="submit"
             className="btn btn-primary"
-            style={{ width: '100%', marginTop: '8px', padding: '12px' }}
+            style={{ width: '100%', marginTop: '12px', padding: '12px' }}
             disabled={loading}
           >
             {loading
               ? '처리 중...'
               : tab === 'login'
               ? '로그인하기'
-              : '회원가입 완료'}
+              : '인증 메일 받고 회원가입'}
           </button>
         </form>
       </div>
