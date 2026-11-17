@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../../supabase'
+import { createPost, updatePost } from '../../services/postService'
 import { useAuth } from '../../context/useAuth'
 
 const WRITEABLE_BOARDS = [
@@ -28,7 +28,7 @@ export default function PostForm({
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  const { user, userNickname } = useAuth()
+  const { user, userNickname, isTestMode } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -55,32 +55,22 @@ export default function PostForm({
     setSaving(true)
     try {
       if (mode === 'create') {
-        const { data, error } = await supabase
-          .from('posts')
-          .insert({
-            board_id: boardId,
-            title: trimmedTitle,
-            content: trimmedContent,
-            author_id: user.id,
-            author_nickname: userNickname,
-            author_name: userNickname,
-          })
-          .select()
-          .single()
-
-        if (error) throw error
-        onSaved(data?.id)
+        const saved = await createPost({
+          board_id: boardId,
+          title: trimmedTitle,
+          content: trimmedContent,
+          author_id: user.id,
+          author_nickname: userNickname,
+          isTestMode,
+        })
+        onSaved(saved?.id)
       } else {
-        const { error } = await supabase
-          .from('posts')
-          .update({
-            board_id: boardId,
-            title: trimmedTitle,
-            content: trimmedContent,
-          })
-          .eq('id', initialPost.id)
-
-        if (error) throw error
+        await updatePost(initialPost.id, {
+          board_id: boardId,
+          title: trimmedTitle,
+          content: trimmedContent,
+          isTestMode,
+        })
         onSaved(initialPost.id)
       }
     } catch (err) {

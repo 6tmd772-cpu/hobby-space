@@ -1,7 +1,7 @@
 import { useAuth } from '../../context/useAuth'
 
 export default function Header({ onNavigate, onOpenAuth, onToggleSidebar }) {
-  const { user, userNickname, isAdmin, managedBoards, signOut } = useAuth()
+  const { user, userNickname, isAdmin, managedBoards, isTestMode, testUser, signOut } = useAuth()
 
   const handleLogout = async () => {
     try {
@@ -20,6 +20,12 @@ export default function Header({ onNavigate, onOpenAuth, onToggleSidebar }) {
 
   return (
     <header className="editorial-header">
+      {isTestMode && (
+        <div className="test-mode-banner">
+          <span>🧪 가상 권한 테스트 모드 동작 중: <strong>{testUser?.roleBadge} ({userNickname})</strong></span>
+          <span className="test-banner-sub">※ 실제 Supabase DB 권한 변경이 아닌 프론트엔드 가상 시뮬레이션입니다</span>
+        </div>
+      )}
       <div className="header-inner">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button

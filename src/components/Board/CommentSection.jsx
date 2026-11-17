@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../supabase'
+import { fetchComments, createComment, deleteComment } from '../../services/commentService'
 import { useAuth } from '../../context/useAuth'
 
 function formatCommentDate(dateString) {
@@ -20,25 +20,19 @@ export default function CommentSection({ postId, boardId, onOpenAuth }) {
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  const { user, userNickname, isAdmin, canManageBoard } = useAuth()
+  const { user, userNickname, isAdmin, canManageBoard, isTestMode } = useAuth()
 
   useEffect(() => {
     let ignore = false
 
     const load = async () => {
       try {
-        const { data, error } = await supabase
-          .from('comments')
-          .select('*')
-          .eq('post_id', postId)
-          .order('created_at', { ascending: true })
-
+        const data = await fetchComments(postId, { isTestMode })
         if (!ignore) {
-          if (error) console.error('Failed to load comments:', error)
-          else setComments(data || [])
+          setComments(data || [])
         }
       } catch (err) {
-        if (!ignore) console.error(err)
+        if (!ignore) console.error('Failed to load comments:', err)
       } finally {
         if (!ignore) setLoading(false)
       }
@@ -51,7 +45,7 @@ export default function CommentSection({ postId, boardId, onOpenAuth }) {
     return () => {
       ignore = true
     }
-  }, [postId])
+  }, [postId, isTestMode])
 
   const handleAddComment = async (e) => {
     e.preventDefault()
@@ -66,18 +60,14 @@ export default function CommentSection({ postId, boardId, onOpenAuth }) {
     setSubmitting(true)
     setErrorMsg('')
     try {
-      const { data, error } = await supabase
-        .from('comments')
-        .insert({
-          post_id: postId,
-          author_id: user.id,
-          author_nickname: userNickname,
-          content: trimmed,
-        })
-        .select()
-        .single()
+      const data = await createComment({
+        post_id: postId,
+        author_id: user.id,
+        author_nickname: userNickname,
+        content: trimmed,
+        isTestMode,
+      })
 
-      if (error) throw error
       setComments((prev) => [...prev, data])
       setNewContent('')
     } catch (err) {
@@ -92,13 +82,8 @@ export default function CommentSection({ postId, boardId, onOpenAuth }) {
     if (!window.confirm('댓글을 삭제하시겠습니까?')) return
 
     try {
-      const { error } = await supabase
-        .from('comments')
-        .delete()
-        .eq('id', commentId)
-
-      if (error) throw error
-      setComments((prev) => prev.filter((c) => c.id !== commentId))
+      await deleteComment(commentId, { isTestMode })
+      setComments((prev) => prev.filter((c) => String(c.id) !== String(commentId)))
     } catch (err) {
       console.error('Failed to delete comment:', err)
       alert('댓글 삭제 실패: ' + err.message)
@@ -107,7 +92,7 @@ export default function CommentSection({ postId, boardId, onOpenAuth }) {
 
   const canDeleteComment = (comment) => {
     if (!user) return false
-    if (user.id === comment.author_id) return true
+    if (String(user.id) === String(comment.author_id)) return true
     if (isAdmin) return true
     return canManageBoard(boardId)
   }

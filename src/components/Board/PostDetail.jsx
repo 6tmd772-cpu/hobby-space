@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../supabase'
+import { fetchPostById, deletePost } from '../../services/postService'
 import { useAuth } from '../../context/useAuth'
 import CommentSection from './CommentSection'
 import { HOBBY_BOARDS } from '../Layout/Sidebar'
@@ -22,21 +22,15 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted, onOpenAu
   const [error, setError] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const { user, isAdmin, canManageBoard } = useAuth()
+  const { user, isAdmin, canManageBoard, isTestMode } = useAuth()
 
   useEffect(() => {
     let ignore = false
 
-    const fetchPost = async () => {
+    const loadPost = async () => {
       try {
-        const { data, error: queryError } = await supabase
-          .from('posts')
-          .select('*')
-          .eq('id', postId)
-          .single()
-
+        const data = await fetchPostById(postId, { isTestMode })
         if (!ignore) {
-          if (queryError) throw queryError
           setPost(data)
         }
       } catch (err) {
@@ -50,13 +44,13 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted, onOpenAu
     }
 
     if (postId) {
-      fetchPost()
+      loadPost()
     }
 
     return () => {
       ignore = true
     }
-  }, [postId])
+  }, [postId, isTestMode])
 
   const handleDelete = async () => {
     if (!window.confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
@@ -65,12 +59,7 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted, onOpenAu
 
     setDeleting(true)
     try {
-      const { error: deleteError } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId)
-
-      if (deleteError) throw deleteError
+      await deletePost(postId, { isTestMode })
       alert('게시글이 삭제되었습니다.')
       onDeleted()
     } catch (err) {
@@ -83,7 +72,7 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted, onOpenAu
 
   // 작성자 본인, 전체 관리자, 또는 해당 게시판 관리자인 경우 관리 가능
   const canManage = Boolean(
-    user && post && (user.id === post.author_id || isAdmin || canManageBoard(post.board_id))
+    user && post && (String(user.id) === String(post.author_id) || isAdmin || canManageBoard(post.board_id))
   )
 
   const boardObj = post ? HOBBY_BOARDS.find((b) => b.id === post.board_id) : null
@@ -118,10 +107,10 @@ export default function PostDetail({ postId, onBack, onEdit, onDeleted, onOpenAu
 
         {canManage && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {isAdmin && user.id !== post.author_id && (
+            {isAdmin && String(user.id) !== String(post.author_id) && (
               <span className="role-tag admin">전체 관리자</span>
             )}
-            {!isAdmin && canManageBoard(post.board_id) && user.id !== post.author_id && (
+            {!isAdmin && canManageBoard(post.board_id) && String(user.id) !== String(post.author_id) && (
               <span className="role-tag manager">취미 관리자</span>
             )}
             <button

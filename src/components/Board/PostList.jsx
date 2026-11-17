@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../supabase'
+import { fetchPosts as getPostList } from '../../services/postService'
+import { useAuth } from '../../context/useAuth'
 import { HOBBY_BOARDS } from '../Layout/Sidebar'
 
 function formatDate(dateString) {
@@ -20,28 +21,19 @@ export default function PostList({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const { isTestMode } = useAuth()
+
   const currentBoard = HOBBY_BOARDS.find((b) => b.id === selectedBoard) || {
     id: 'all',
     name: '전체 이야기',
     desc: '모든 취미 공간의 통합 피드',
   }
 
-  const fetchPosts = async (showLoadingState = true) => {
+  const loadPosts = async (showLoadingState = true) => {
     if (showLoadingState) setLoading(true)
     setError(null)
     try {
-      let query = supabase
-        .from('posts')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (selectedBoard !== 'all') {
-        query = query.eq('board_id', selectedBoard)
-      }
-
-      const { data, error: queryError } = await query
-
-      if (queryError) throw queryError
+      const data = await getPostList({ selectedBoard, isTestMode })
       setPosts(data || [])
     } catch (err) {
       console.error('Failed to load posts:', err)
@@ -56,24 +48,9 @@ export default function PostList({
 
     const load = async () => {
       try {
-        let query = supabase
-          .from('posts')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (selectedBoard !== 'all') {
-          query = query.eq('board_id', selectedBoard)
-        }
-
-        const { data, error: queryError } = await query
-
+        const data = await getPostList({ selectedBoard, isTestMode })
         if (!ignore) {
-          if (queryError) {
-            console.error('Failed to load posts:', queryError)
-            setError('게시글을 불러오는 중 오류가 발생했습니다.')
-          } else {
-            setPosts(data || [])
-          }
+          setPosts(data || [])
         }
       } catch (err) {
         if (!ignore) {
@@ -92,7 +69,7 @@ export default function PostList({
     return () => {
       ignore = true
     }
-  }, [selectedBoard])
+  }, [selectedBoard, isTestMode])
 
   const getBoardBadgeName = (boardId) => {
     const found = HOBBY_BOARDS.find((b) => b.id === boardId)
@@ -116,7 +93,7 @@ export default function PostList({
       ) : error ? (
         <div className="empty-state">
           <p style={{ color: 'var(--color-danger)' }}>{error}</p>
-          <button type="button" className="btn btn-outline" onClick={() => fetchPosts(true)}>
+          <button type="button" className="btn btn-outline" onClick={() => loadPosts(true)}>
             다시 시도
           </button>
         </div>

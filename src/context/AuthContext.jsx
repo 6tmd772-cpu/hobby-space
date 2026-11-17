@@ -1,14 +1,33 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../supabase'
 import { AuthContext } from './authContextDef'
+import { isTestModeActive, getCurrentTestUser } from '../test/testStore'
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [managedBoards, setManagedBoards] = useState([])
+  const [realUser, setRealUser] = useState(null)
+  const [realProfile, setRealProfile] = useState(null)
+  const [realManagedBoards, setRealManagedBoards] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // 프로필 정보 및 담당 게시판 조회
+  // 가상 테스트 모드 상태
+  const [testUser, setTestUser] = useState(() => getCurrentTestUser())
+  const [isTestMode, setIsTestMode] = useState(() => isTestModeActive())
+
+  // 테스트 역할 변경 리스너
+  const handleTestRoleChange = useCallback(() => {
+    const active = isTestModeActive()
+    setIsTestMode(active)
+    setTestUser(active ? getCurrentTestUser() : null)
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('test-role-change', handleTestRoleChange)
+    return () => {
+      window.removeEventListener('test-role-change', handleTestRoleChange)
+    }
+  }, [handleTestRoleChange])
+
+  // 실제 Supabase 프로필 정보 조회
   const fetchProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -23,17 +42,16 @@ export function AuthProvider({ children }) {
       }
 
       if (data) {
-        setProfile(data)
+        setRealProfile(data)
       }
 
-      // 취미별 관리자 매핑 정보 조회
       const { data: managerData } = await supabase
         .from('board_managers')
         .select('board_id')
         .eq('user_id', userId)
 
       if (managerData) {
-        setManagedBoards(managerData.map((m) => m.board_id))
+        setRealManagedBoards(managerData.map((m) => m.board_id))
       }
 
       return data
@@ -46,7 +64,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const currentUser = session?.user ?? null
-      setUser(currentUser)
+      setRealUser(currentUser)
       if (currentUser) {
         await fetchProfile(currentUser.id)
       }
@@ -56,12 +74,12 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         const currentUser = session?.user ?? null
-        setUser(currentUser)
+        setRealUser(currentUser)
         if (currentUser) {
           await fetchProfile(currentUser.id)
         } else {
-          setProfile(null)
-          setManagedBoards([])
+          setRealProfile(null)
+          setRealManagedBoards([])
         }
         setLoading(false)
       }
@@ -91,7 +109,6 @@ export function AuthProvider({ children }) {
 
     if (error) throw error
 
-    // 백업: 트리거 지연 시 직접 profile upsert
     if (data.user) {
       try {
         await supabase.from('profiles').upsert({
@@ -126,30 +143,58 @@ export function AuthProvider({ children }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
-    setUser(null)
-    setProfile(null)
-    setManagedBoards([])
+    setRealUser(null)
+    setRealProfile(null)
+    setRealManagedBoards([])
   }
 
-  // 특정 게시판의 관리자 권한 확인 (전체 관리자이거나 담당 취미 관리자인지 확인)
+  // 특정 게시판의 관리자 권한 확인
   const canManageBoard = (boardId) => {
-    if (!profile) return false
-    if (profile.role === 'admin') return true
-    return managedBoards.includes(boardId)
+    if (isTestMode && testUser) {
+      if (testUser.role === 'admin') return true
+      return (testUser.managedBoards || []).includes(boardId)
+    }
+    if (!realProfile) return false
+    if (realProfile.role === 'admin') return true
+    return realManagedBoards.includes(boardId)
   }
+
+  // 가상 테스트 모드가 켜진 경우 가상 유저 상태 주입, 꺼진 경우 실제 Supabase 세션 반환
+  const effectiveUser = isTestMode && testUser
+    ? { id: testUser.id, email: testUser.email }
+    : realUser
+
+  const effectiveProfile = isTestMode && testUser
+    ? { id: testUser.id, nickname: testUser.nickname, role: testUser.role }
+    : realProfile
+
+  const effectiveIsAdmin = isTestMode && testUser
+    ? testUser.role === 'admin'
+    : realProfile?.role === 'admin'
+
+  const effectiveManagedBoards = isTestMode && testUser
+    ? (testUser.managedBoards || [])
+    : realManagedBoards
+
+  const effectiveUserNickname = isTestMode && testUser
+    ? testUser.nickname
+    : (realProfile?.nickname || realProfile?.name || realUser?.user_metadata?.nickname || '회원')
 
   const value = {
-    user,
-    profile,
+    user: effectiveUser,
+    profile: effectiveProfile,
     loading,
-    isAdmin: profile?.role === 'admin',
-    managedBoards,
+    isAdmin: effectiveIsAdmin,
+    managedBoards: effectiveManagedBoards,
     canManageBoard,
-    userNickname: profile?.nickname || profile?.name || user?.user_metadata?.nickname || '회원',
+    userNickname: effectiveUserNickname,
     signUp,
     signIn,
     signOut,
-    refreshProfile: () => (user ? fetchProfile(user.id) : Promise.resolve(null)),
+    refreshProfile: () => (realUser ? fetchProfile(realUser.id) : Promise.resolve(null)),
+    // 테스트 모드 전용 상태 및 메타데이터
+    isTestMode,
+    testUser,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -8,6 +8,7 @@ import AuthModal from './components/Auth/AuthModal'
 import PostList from './components/Board/PostList'
 import PostDetail from './components/Board/PostDetail'
 import PostForm from './components/Board/PostForm'
+import TestModeController from './test/TestModeController'
 
 function MainApp() {
   const [selectedBoard, setSelectedBoard] = useState('all') // 'all' | 'book' | 'game' | 'music' | 'cook' | 'active'
@@ -74,6 +75,7 @@ function MainApp() {
 
   return (
     <div className="app-container">
+      <TestModeController />
       <Header
         onNavigate={handleNavigate}
         onOpenAuth={() => setIsAuthModalOpen(true)}
